@@ -5744,7 +5744,7 @@ impl VestingContract {
         // Update vault owner (this would integrate with main vault transfer logic)
         let mut vault = Self::get_vault_internal(&env, vault_id);
         let old_beneficiary = vault.owner.clone();
-        vault.owner = new_beneficiary;
+        vault.owner = new_beneficiary.clone();
         env.storage()
             .instance()
             .set(&DataKey::VaultData(vault_id), &vault);
@@ -6387,7 +6387,7 @@ impl VestingContract {
         vault_id: u64,
         min_destination_amount: Option<i128>,
     ) -> PathPaymentSimulation {
-        let current_time = env.ledger().timestamp();
+        let _current_time = env.ledger().timestamp();
 
         Self::require_not_paused(&env);
 
