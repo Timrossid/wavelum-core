@@ -39,7 +39,8 @@ jobs:
           echo "Validating PR title: $PR_TITLE"
           
           # Conventional commits pattern: type(scope): subject
-          if [[ ! "$PR_TITLE" =~ ^(feat|fix|docs|style|refactor|test|chore|perf|ci)(\(.+\))?: .+ ]]; then
+          # Using grep for better compatibility
+          if ! echo "$PR_TITLE" | grep -qE '^(feat|fix|docs|style|refactor|test|chore|perf|ci)(\(.+\))?: .+'; then
             echo "WARNING: PR title does not follow conventional commits format"
             echo "Expected format: type(scope): subject"
             echo "Example: feat(vault): add claim function"
