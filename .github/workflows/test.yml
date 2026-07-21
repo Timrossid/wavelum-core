@@ -54,8 +54,20 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Check if contracts changed
+        id: check-contracts
+        run: |
+          if git diff --name-only origin/main...HEAD | grep -q '^contracts/'; then
+            echo "contracts_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "contracts_changed=false" >> $GITHUB_OUTPUT
+          fi
       
       - name: Install Rust
+        if: steps.check-contracts.outputs.contracts_changed == 'true'
         uses: actions-rs/toolchain@v1
         with:
           toolchain: 1.91.0
@@ -64,6 +76,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install Stellar CLI
+        if: steps.check-contracts.outputs.contracts_changed == 'true'
         run: |
           wget https://github.com/stellar/stellar-cli/releases/download/v25.1.0/stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
           tar -xzf stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
@@ -90,15 +103,18 @@ jobs:
           stellar --version
 
       - name: Build Contract
+        if: steps.check-contracts.outputs.contracts_changed == 'true'
         run: |
           cargo clean
           cargo build --target wasm32v1-none --release
 
       - name: Run Formal Reentrancy Verification
+        if: steps.check-contracts.outputs.contracts_changed == 'true'
         run: |
           cargo test -p vesting_contracts formal_reentrancy -- --nocapture
 
       - name: Run Unit Tests
+        if: steps.check-contracts.outputs.contracts_changed == 'true'
         run: |
           cargo test --workspace
           cargo test --all-features
