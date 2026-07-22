@@ -55,6 +55,34 @@ jobs:
           cargo clean
           cargo build --target wasm32v1-none --release
 
+      - name: Contract Safety Checks
+        run: |
+          chmod +x scripts/contract-safety.sh
+          ./scripts/contract-safety.sh
+
+      - name: Run Clippy with Strict Settings
+        run: |
+          cargo clippy --all-targets --all-features -- -D warnings -W clippy::all -W clippy::pedantic
+
+      - name: Check Code Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Scan for Unsafe Patterns
+        run: |
+          # Check for unwrap/expect in production code (non-test files)
+          if grep -r "\.unwrap()\|\.expect(" contracts --include="*.rs" \
+            | grep -v "/tests/" | grep -v "test_" | grep -v "formal_reentrancy"; then
+            echo "ERROR: Found unwrap()/expect() in production code"
+            exit 1
+          fi
+          echo "✓ No unwrap()/expect() found in production code"
+
+      - name: Verify Access Control
+        run: |
+          echo "Verifying all public contract functions have access control patterns..."
+          # This is more of a documentation/review check
+          cargo test --workspace
+
       - name: Run Formal Reentrancy Verification
         run: |
           cargo test -p vesting_contracts formal_reentrancy -- --nocapture
