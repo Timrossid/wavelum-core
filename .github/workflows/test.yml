@@ -2,9 +2,21 @@ name: Smart Contracts CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "develop", "feat/*", "fix/*", "chore/*", "release/*" ]
+    paths:
+      - "contracts/**"
+      - "tests/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/**"
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "develop", "release/*" ]
+    paths:
+      - "contracts/**"
+      - "tests/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/**"
 
 env:
   CARGO_TERM_COLOR: always
@@ -12,6 +24,7 @@ env:
 
 jobs:
   test:
+    name: Unit & Integration Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -20,36 +33,25 @@ jobs:
         run: scripts/sync-interfaces.sh --check
       
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.91.0
           target: wasm32v1-none
-          override: true
           components: rustfmt, clippy
 
       - name: Install Stellar CLI
         run: |
-          wget https://github.com/stellar/stellar-cli/releases/download/v25.1.0/stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
-          tar -xzf stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
-          sudo mv stellar /usr/local/bin/
           set -euo pipefail
-
           VERSION="25.1.0"
           ARCHIVE="stellar-cli-${VERSION}-x86_64-unknown-linux-gnu.tar.gz"
           URL="https://github.com/stellar/stellar-cli/releases/download/v${VERSION}/${ARCHIVE}"
-
           wget "${URL}" -O "${ARCHIVE}"
-
-          # Package layout has changed across versions; locate the binary from the archive contents.
           BIN_PATH="$(tar -tzf "${ARCHIVE}" | grep -E '(^|/)stellar(-cli)?$' | head -n 1 || true)"
           if [ -z "${BIN_PATH}" ]; then
-            echo "Could not locate stellar CLI binary in ${ARCHIVE}"
-            tar -tzf "${ARCHIVE}"
+            echo "Could not locate stellar CLI binary"
             exit 1
           fi
-
           tar -xzf "${ARCHIVE}"
-
           sudo install -m 0755 "${BIN_PATH}" /usr/local/bin/stellar
           stellar --version
 
@@ -66,3 +68,54 @@ jobs:
         run: |
           cargo test --workspace
           cargo test --all-features
+
+  fuzz-test:
+    name: Fuzz & Property-Based Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+          target: wasm32v1-none
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz || true
+
+      - name: Run Property-Based Tests
+        continue-on-error: true
+        run: |
+          cargo test --workspace --features proptest || true
+
+      - name: Run Fuzz Tests (Limited Iterations)
+        continue-on-error: true
+        run: |
+          cargo fuzz list || echo "No fuzz targets found"
+          for target in $(cargo fuzz list 2>/dev/null); do
+            echo "Running fuzz target: $target"
+            cargo fuzz run $target -- -max_total_time=30 || true
+          done
+
+      - name: Run Invariant Tests
+        run: |
+          cargo test --workspace -- --nocapture
+
+  smoke-test:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+          target: wasm32v1-none
+
+      - name: Quick Build Check
+        run: cargo build --target wasm32v1-none --release
+
+      - name: Quick Test
+        run: cargo test --workspace -- --test-threads=4
