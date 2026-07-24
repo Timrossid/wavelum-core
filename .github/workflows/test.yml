@@ -27,7 +27,10 @@ jobs:
     name: Unit & Integration Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
+
+      - name: Validate Solidity interface sync
+        run: scripts/sync-interfaces.sh --check
       
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
